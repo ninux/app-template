@@ -39,7 +39,7 @@ ifeq '$(CONFIG_ENABLE_SIMULATION)' 'y'
 CC_host += -DOSC_SIM
 CC_target += -DOSC_SIM
 endif
-LD_host := gcc -fPIC -ljpeg -lgd
+LD_host := gcc -fPIC
 LD_target := bfin-uclinux-gcc -elf2flt="-s 1048576"
 
 # Listings of source files for the different applications.
@@ -57,7 +57,7 @@ ifeq '$(CONFIG_ENABLE_DEBUG)' 'y'
 LIBS_host := $(LIBS_host)_dbg
 LIBS_target := $(LIBS_target)_dbg
 endif
-LIBS_host := $(LIBS_host).a
+LIBS_host := $(LIBS_host).a -ljpeg -lgd
 LIBS_target := $(LIBS_target).a  ext/jpeg-6b/libjpeg_target.a ext/gd-lib/libgd_target.a
 
 BINARIES := $(addsuffix _host, $(PRODUCTS)) $(addsuffix _target, $(PRODUCTS))
@@ -76,6 +76,9 @@ install: cgi/cgi_host
 	cp -RL cgi/www/* /var/www
 	cp $< /var/www/cgi-bin/cgi
 	chmod -Rf a+rX /var/www/ || true
+
+-ljpeg:
+-lgd:
 
 reconfigure:
 ifeq '$(CONFIG_PRIVATE_FRAMEWORK)' 'n'
