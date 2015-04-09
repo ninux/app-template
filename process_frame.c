@@ -19,6 +19,8 @@ const int nr = OSC_CAM_MAX_IMAGE_HEIGHT/2;
 
 int TextColor;
 
+int avgDxy[3][IMG_SIZE];
+
 void CalcDeriv(void);
 
 void ResetProcess()
@@ -80,6 +82,10 @@ void CalcDeriv()
 
 			int dy = -(int) *(p-nc-1) -2* (int) *(p-nc) -(int) *(p-nc+1)
 				+ (int) *(p+nc-1) + 2* (int) *(p+nc) + (int) *(p+nc+1);
+
+			avgDxy[0][r+c] = dx*dx;
+			avgDxy[1][r+c] = dy*dy;
+			avgDxy[2][r+c] = dx*dy;
 
 			data.u8TempImage[BACKGROUND][r+c] = (uint8)MIN(255, MAX(0, 128+dx));
 			data.u8TempImage[THRESHOLD][r+c] = (uint8)MIN(255, MAX(0, 128+dy));
