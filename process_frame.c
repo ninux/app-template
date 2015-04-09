@@ -14,14 +14,20 @@
 
 #define IMG_SIZE NUM_COLORS*(OSC_CAM_MAX_IMAGE_WIDTH/2)*(OSC_CAM_MAX_IMAGE_HEIGHT/2)
 
+#define BORDER sizeof(GaussFilter - 1)
+
 const int nc = OSC_CAM_MAX_IMAGE_WIDTH/2;
 const int nr = OSC_CAM_MAX_IMAGE_HEIGHT/2;
+
+const int GaussFilter[] = {82, 72, 50, 27, 11, 4, 1};
 
 int TextColor;
 
 int avgDxy[3][IMG_SIZE];
+int helpBuf[IMG_SIZE];
 
 void CalcDeriv(void);
+void AvgDeriv(int index);
 
 void ResetProcess()
 {
@@ -89,6 +95,59 @@ void CalcDeriv()
 
 			data.u8TempImage[BACKGROUND][r+c] = (uint8)MIN(255, MAX(0, 128+dx));
 			data.u8TempImage[THRESHOLD][r+c] = (uint8)MIN(255, MAX(0, 128+dy));
+		}
+	}
+}
+
+void AvgDeriv(int index)
+{
+	int c, r, s;
+
+	for(r = nc; r < nc*nc-nc; r += nc) {
+		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
+			int* p = &avgDxy[index][r+c];
+
+			/*
+			int sx = (*(p))*GaussFilter[0]
+				+ (*(p-1) + *(p+1))*GaussFilter[1]
+				+ (*(p-3) + *(p+3))*GaussFilter[2]
+				+ (*(p-4) + *(p+4))*GaussFilter[3]
+				+ (*(p-5) + *(p+5))*GaussFilter[4]
+				+ (*(p-6) + *(p+6))*GaussFilter[5]
+				+ (*(p-7) + *(p+7))*GaussFilter[6];
+			*/
+
+			int sx = (*(p))*GaussFilter[0];
+
+			for(s = 1; s < 7; s++) {
+				sx += (*(p-s) + *(p+s))*GaussFilter[s];
+			}
+
+			helpBuf[r+c] = (sx >> 8);
+		}
+	}
+
+	for(r = nc; r < nc*nc-nc; r += nc) {
+		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
+			int* p = &helpBuf[r+c];
+
+			/*
+			int sx = (*(p))*GaussFilter[0]
+				+ (*(p-1) + *(p+1))*GaussFilter[1]
+				+ (*(p-3) + *(p+3))*GaussFilter[2]
+				+ (*(p-4) + *(p+4))*GaussFilter[3]
+				+ (*(p-5) + *(p+5))*GaussFilter[4]
+				+ (*(p-6) + *(p+6))*GaussFilter[5]
+				+ (*(p-7) + *(p+7))*GaussFilter[6];
+			*/
+
+			int sy = (*(p))*GaussFilter[0];
+
+			for(s = 1; s < 7; s++) {
+				sy += (*(p-(s*nc)) + *(p+(s*nc)))*GaussFilter[s];
+			}
+
+			avgDxy[index][r+c] = (sy >> 8);
 		}
 	}
 }
