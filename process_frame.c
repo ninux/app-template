@@ -19,6 +19,7 @@ const int nr = OSC_CAM_MAX_IMAGE_HEIGHT/2;
 
 int TextColor;
 
+void CalcDeriv(void);
 
 void ResetProcess()
 {
@@ -28,7 +29,6 @@ void ResetProcess()
 	else
 		TextColor = CYAN;
 }
-
 
 void ProcessFrame()
 {
