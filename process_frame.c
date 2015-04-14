@@ -18,8 +18,6 @@
 
 #define CORNER_PARAM_DEFAULT 5
 
-#define TEST_WAC 1
-
 const int nc = OSC_CAM_MAX_IMAGE_WIDTH/2;
 const int nr = OSC_CAM_MAX_IMAGE_HEIGHT/2;
 
@@ -40,6 +38,8 @@ int WAC[IMG_SIZE];
 void CalcDeriv(void);
 void AvgDeriv(int index);
 void CalcWAC(int k);
+void LocateMax(void);
+void DrawBoxes(void);
 
 void ResetProcess()
 {
@@ -53,7 +53,7 @@ void ResetProcess()
 void ProcessFrame()
 {
 	uint32 t1, t2;
-	char Text[] = "hallo world";
+	// char Text[] = "hallo world";
 	//initialize counters
 	if(data.ipc.state.nStepCounter == 1) {
 		//use for initialization; only done in first step
@@ -63,8 +63,12 @@ void ProcessFrame()
 		//example for time measurement
 		t1 = OscSupCycGet();
 		//example for copying sensor image to background image
-		memcpy(data.u8TempImage[BACKGROUND], data.u8TempImage[SENSORIMG], IMG_SIZE);
+		// memcpy(data.u8TempImage[BACKGROUND], data.u8TempImage[SENSORIMG], IMG_SIZE);
 		//example for time measurement
+		CalcDeriv();
+		CalcWAC(CORNER_PARAM_DEFAULT);
+		LocateMax();
+		DrawBoxes();
 		t2 = OscSupCycGet();
 
 		//example for log output to console
@@ -72,16 +76,13 @@ void ProcessFrame()
 
 		//example for drawing output
 		//draw line
-		DrawLine(10, 100, 200, 20, RED);
+		//DrawLine(10, 100, 200, 20, RED);
 		//draw open rectangle
-		DrawBoundingBox(20, 10, 50, 40, false, GREEN);
+		//DrawBoundingBox(20, 10, 50, 40, false, GREEN);
 		//draw filled rectangle
-		DrawBoundingBox(80, 100, 110, 120, true, BLUE);
-		DrawString(200, 200, strlen(Text), TINY, TextColor, Text);
+		//DrawBoundingBox(80, 100, 110, 120, true, BLUE);
+		//DrawString(200, 200, strlen(Text), TINY, TextColor, Text);
 	}
-
-	CalcDeriv();
-	CalcWAC(CORNER_PARAM_DEFAULT);
 }
 
 
@@ -107,8 +108,10 @@ void CalcDeriv()
 			avgDxy[1][r+c] = dy*dy;
 			avgDxy[2][r+c] = dx*dy;
 
+#ifdef TEST_DERIVATES
 			data.u8TempImage[BACKGROUND][r+c] = (uint8)MIN(255, MAX(0, 128+dx));
 			data.u8TempImage[THRESHOLD][r+c] = (uint8)MIN(255, MAX(0, 128+dy));
+#endif
 		}
 	}
 }
@@ -141,13 +144,13 @@ void AvgDeriv(int index)
 				sx += (*(p-s) + *(p+s))*GaussFilter[s];
 			}
 #else
-			int sx =  ((*(p-6) + *(p-6)))
-				+ ((*(p-5) + *(p-5)) << 2)
-				+ ((*(p-4) + *(p-4)) << 3)
-				+ ((*(p-3) + *(p-3)) << 5)
-				+ ((*(p-2) + *(p-2)) << 6)
-				+ ((*(p-1) + *(p-1)) << 6)
-				+ ((*p<<7));
+			int sx =  ((*(p-6) + *(p+6)))
+				+ ((*(p-5) + *(p+5)) << 2)
+				+ ((*(p-4) + *(p+4)) << 3)
+				+ ((*(p-3) + *(p+3)) << 5)
+				+ ((*(p-2) + *(p+2)) << 6)
+				+ ((*(p-1) + *(p+1)) << 6)
+				+ ((*p << 7));
 #endif
 			helpBuf[r+c] = (sx >> 8);
 		}
@@ -174,15 +177,19 @@ void AvgDeriv(int index)
 				sy += (*(p-(s*nc)) + *(p+(s*nc)))*GaussFilter[s];
 			}
 #else
-			int sy =  ((*(p-6) + *(p-6)))
-				+ ((*(p-5) + *(p-5)) << 2)
-				+ ((*(p-4) + *(p-4)) << 3)
-				+ ((*(p-3) + *(p-3)) << 5)
-				+ ((*(p-2) + *(p-2)) << 6)
-				+ ((*(p-1) + *(p-1)) << 6)
-				+ ((*p<<7));
+			int sy =  ((*(p-6) + *(p+6)))
+				+ ((*(p-5) + *(p+5)) << 2)
+				+ ((*(p-4) + *(p+4)) << 3)
+				+ ((*(p-3) + *(p+3)) << 5)
+				+ ((*(p-2) + *(p+2)) << 6)
+				+ ((*(p-1) + *(p+1)) << 6)
+				+ ((*p << 7));
 #endif
 			avgDxy[index][r+c] = (sy >> 8);
+#ifdef TEST_GAUSSFILTER
+			data.u8TempImage[BACKGROUND][r+c] =
+				MAX(0,MIN(255,(avgDxy[2][r+c] >> 7)));
+#endif
 		}
 	}
 }
@@ -190,26 +197,83 @@ void AvgDeriv(int index)
 void CalcWAC(int k)
 {
 	int c, r = 0;
-
-	int Ix2, Iy2, Ixy;
+	int Ix2, Iy2, Ixy = 0;
 
 	AvgDeriv(0);
 	AvgDeriv(1);
 	AvgDeriv(2);
 
-	for(c = nc; r < nr*nc-nc; r += nc) {
+	for(c = nc*(BORDER+1); r < (nr*nc - nc*(BORDER+1)); r += nc) {
 		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
 			/* scale data to prevent overflow */
 			Ix2 = avgDxy[0][r+c] >> 7;
 			Iy2 = avgDxy[1][r+c] >> 7;
 			Ixy = avgDxy[2][r+c] >> 7;
 
-			WAC[r+c] = (Ix2*Iy2 - (Ixy^2))
+			avgDxy[2][r+c] = (Ix2*Iy2 - (Ixy^2))
 				- ((k*((Ix2 + Iy2)^2)) >> 7);
 #ifdef TEST_WAC
 			data.u8TempImage[BACKGROUND][r+c] =
-				MAX(0,MIN(255,(WAC[r+c] >> 10)));
+				MAX(0,MIN(255,(avgDxy[2][r+c] >> 7)));
 #endif
+		}
+	}
+}
+
+void LocateMax(void)
+{
+	int c, r = 0;
+
+	for(r = nc*(BORDER+1); r < (nr*nc - nc*(BORDER+1)); r += nc) {
+		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
+			int *pos = &avgDxy[2][r+c];	// current position
+			int val = avgDxy[2][r+c];	// current value
+			int sc, sr = 0;			// scope column, row
+
+			for(sc = -6; sc < 7; sc++) {
+				for(sr = -6; sr < 7; sr++) {
+					if (val < *((pos+sr)+(nc*sc))) {
+						// is not a maximum -> set 0
+						avgDxy[0][r+c] = 0;
+						// break the loop
+						sr = sc = 8;
+					} else {
+						// possible maximum -> keep
+						avgDxy[0][r+c] = val;
+					}
+				}
+			}
+#ifdef TEST_LOCATE_MAX
+			data.u8TempImage[BACKGROUND][r+c] =
+				MAX(0,MIN(255,(avgDxy[0][r+c]>>7)));
+#endif
+		}
+	}
+}
+
+void DrawBoxes(void)
+{
+	int c, r = 0;
+	int SizeBox = 5;
+
+	for(r = nc*(BORDER+1); r < (nr*nc - nc*(BORDER+1)); r += nc) {
+		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
+			if((avgDxy[0][r+c]>>7) > ((255*data.ipc.state.nThreshold)/100)) {
+				avgDxy[1][r+c] = 255;
+				DrawBoundingBox(c-SizeBox,
+						(r/nc)-SizeBox,
+						c+SizeBox,
+						(r/nc)+SizeBox,
+						false,
+						RED);
+				printf("POS: %i \t%i\n",
+				       r/(nc),
+				       c);
+			} else {
+				avgDxy[1][r+c] = 0;
+			}
+			data.u8TempImage[BACKGROUND][r+c] =
+				 MAX(0,MIN(255,(avgDxy[1][r+c])));
 		}
 	}
 }
