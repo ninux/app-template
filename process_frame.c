@@ -16,18 +16,28 @@
 
 #define BORDER sizeof(GaussFilter - 1)
 
+#define CORNER_PARAM_DEFAULT 5
+
 const int nc = OSC_CAM_MAX_IMAGE_WIDTH/2;
 const int nr = OSC_CAM_MAX_IMAGE_HEIGHT/2;
 
+#define SPEED_OPTIMIZING 1
+
+#ifndef SPEED_OPTIMIZING
 const int GaussFilter[] = {82, 72, 50, 27, 11, 4, 1};
+#else
+const int GaussFilter[] = {1, 4, 8, 32, 64, 64, 128};
+#endif
 
 int TextColor;
 
 int avgDxy[3][IMG_SIZE];
 int helpBuf[IMG_SIZE];
+int VAC[IMG_SIZE];
 
 void CalcDeriv(void);
 void AvgDeriv(int index);
+void CalcVAC(int k);
 
 void ResetProcess()
 {
@@ -67,6 +77,7 @@ void ProcessFrame()
 		DrawBoundingBox(80, 100, 110, 120, true, BLUE);
 		DrawString(200, 200, strlen(Text), TINY, TextColor, Text);
 	}
+
 	CalcDeriv();
 }
 
@@ -101,9 +112,12 @@ void CalcDeriv()
 
 void AvgDeriv(int index)
 {
-	int c, r, s;
+	int c, r;
+#ifndef SPEED_OPTIMIZING
+	s;
+#endif
 
-	for(r = nc; r < nc*nc-nc; r += nc) {
+	for(r = nc; r < nr*nc-nc; r += nc) {
 		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
 			int* p = &avgDxy[index][r+c];
 
@@ -117,17 +131,26 @@ void AvgDeriv(int index)
 				+ (*(p-7) + *(p+7))*GaussFilter[6];
 			*/
 
+#ifndef SPEED_OPTIMIZING
 			int sx = (*(p))*GaussFilter[0];
 
 			for(s = 1; s < 7; s++) {
 				sx += (*(p-s) + *(p+s))*GaussFilter[s];
 			}
-
+#else
+			int sx =  ((*(p-6) + *(p-6)))
+				+ ((*(p-5) + *(p-5)) << 2)
+				+ ((*(p-4) + *(p-4)) << 3)
+				+ ((*(p-3) + *(p-3)) << 5)
+				+ ((*(p-2) + *(p-2)) << 6)
+				+ ((*(p-1) + *(p-1)) << 6)
+				+ ((*p<<7));
+#endif
 			helpBuf[r+c] = (sx >> 8);
 		}
 	}
 
-	for(r = nc; r < nc*nc-nc; r += nc) {
+	for(r = nc; r < nr*nc-nc; r += nc) {
 		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
 			int* p = &helpBuf[r+c];
 
@@ -141,13 +164,45 @@ void AvgDeriv(int index)
 				+ (*(p-7) + *(p+7))*GaussFilter[6];
 			*/
 
+#ifndef SPEED_OPTIMIZING
 			int sy = (*(p))*GaussFilter[0];
 
 			for(s = 1; s < 7; s++) {
 				sy += (*(p-(s*nc)) + *(p+(s*nc)))*GaussFilter[s];
 			}
-
+#else
+			int sy =  ((*(p-6) + *(p-6)))
+				+ ((*(p-5) + *(p-5)) << 2)
+				+ ((*(p-4) + *(p-4)) << 3)
+				+ ((*(p-3) + *(p-3)) << 5)
+				+ ((*(p-2) + *(p-2)) << 6)
+				+ ((*(p-1) + *(p-1)) << 6)
+				+ ((*p<<7));
+#endif
 			avgDxy[index][r+c] = (sy >> 8);
+		}
+	}
+}
+
+void CalcVAC(int k)
+{
+	int c, r = 0;
+
+	int Ix2, Iy2, Ixy;
+
+	AvgDeriv(0);
+	AvgDeriv(1);
+	AvgDeriv(2);
+
+	for(c = nc; r < nr*nc-nc; r += nc) {
+		for(c = BORDER+1; c < nc-(BORDER+1); c++) {
+			/* scale data to prevent overflow */
+			Ix2 = avgDxy[0][r+c] >> 7;
+			Iy2 = avgDxy[1][r+c] >> 7;
+			Ixy = avgDxy[2][r+c] >> 7;
+
+			VAC[r+c] = (Ix2*Iy2 - (Ixy^2))
+				- ((k*((Ix2 + Iy2)^2)) >> 7);
 		}
 	}
 }
