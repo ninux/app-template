@@ -18,6 +18,8 @@
 
 #define CORNER_PARAM_DEFAULT 5
 
+#define TEST_WAC 1
+
 const int nc = OSC_CAM_MAX_IMAGE_WIDTH/2;
 const int nr = OSC_CAM_MAX_IMAGE_HEIGHT/2;
 
@@ -33,11 +35,11 @@ int TextColor;
 
 int avgDxy[3][IMG_SIZE];
 int helpBuf[IMG_SIZE];
-int VAC[IMG_SIZE];
+int WAC[IMG_SIZE];
 
 void CalcDeriv(void);
 void AvgDeriv(int index);
-void CalcVAC(int k);
+void CalcWAC(int k);
 
 void ResetProcess()
 {
@@ -79,6 +81,7 @@ void ProcessFrame()
 	}
 
 	CalcDeriv();
+	CalcWAC(CORNER_PARAM_DEFAULT);
 }
 
 
@@ -184,7 +187,7 @@ void AvgDeriv(int index)
 	}
 }
 
-void CalcVAC(int k)
+void CalcWAC(int k)
 {
 	int c, r = 0;
 
@@ -201,8 +204,12 @@ void CalcVAC(int k)
 			Iy2 = avgDxy[1][r+c] >> 7;
 			Ixy = avgDxy[2][r+c] >> 7;
 
-			VAC[r+c] = (Ix2*Iy2 - (Ixy^2))
+			WAC[r+c] = (Ix2*Iy2 - (Ixy^2))
 				- ((k*((Ix2 + Iy2)^2)) >> 7);
+#ifdef TEST_WAC
+			data.u8TempImage[BACKGROUND][r+c] =
+				MAX(0,MIN(255,(WAC[r+c] >> 10)));
+#endif
 		}
 	}
 }
